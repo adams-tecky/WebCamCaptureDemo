@@ -1,0 +1,15 @@
+/* src/WebcamCapture.css */
+.webcam-frame {
+  display: inline-block;
+  padding: 0px;
+  border: 5px solid red;
+  transition: border-color 0.3s;
+}
+
+.webcam-frame.clear {
+  border-color: green;
+}
+
+.webcam-frame.unclear {
+  border-color: red;
+}

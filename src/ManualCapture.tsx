@@ -27,7 +27,6 @@ const WebcamCapture: React.FC = () => {
   const [detector, setDetector] = useState<faceDetection.FaceDetector | null>(
     null
   );
-  const [isCapturing, setIsCapturing] = useState<boolean>(true);
   const [cvLoaded, setCvLoaded] = useState<boolean>(false);
   const [isImageClear, setIsImageClear] = useState<boolean>(false);
 
@@ -126,99 +125,65 @@ const WebcamCapture: React.FC = () => {
     [isBlurryLaplacian, isBlurryTenengrad]
   );
 
-  // Function to detect faces
-  const detectFace = useCallback(
-    async (imageSrc: string): Promise<boolean> => {
-      if (!detector) {
-        return false;
-      }
-      const img = new Image();
-      img.src = imageSrc;
-      await img.decode();
-
-      // Check for blur using both methods
-      if (isBlurry(img)) {
-        console.log("Image is blurry");
-        setIsImageClear(false);
-        return false;
-      }
-
-      const detections = await detector.estimateFaces(img);
-
-      // Ensure bounding box size
-      const isClear = detections.some((detection) => {
-        const box = detection.box;
-
-        return box.width >= MIN_BOX_SIZE && box.height >= MIN_BOX_SIZE;
-      });
-
-      setIsImageClear(isClear);
-      return isClear;
-    },
-    [detector, isBlurry]
-  );
-
-  // Capture frame and detect face
-  const captureFrame = useCallback(async () => {
-    if (webcamRef.current && isCapturing && detector && cvLoaded) {
+  // Function to detect faces and blurriness continuously
+  const detectFace = useCallback(async () => {
+    if (webcamRef.current && detector && cvLoaded) {
       const imageSrc = webcamRef.current.getScreenshot();
       if (imageSrc) {
-        const detection = await detectFace(imageSrc);
-        if (detection) {
-          setCapturedImage(imageSrc);
-          setIsCapturing(false);
+        const img = new Image();
+        img.src = imageSrc;
+        await img.decode();
 
-          // // Convert the base64 image to a Blob
-          // const response = await fetch(imageSrc);
-          // const blob = await response.blob();
-
-          // // Create a FormData object and append the Blob
-          // const formData = new FormData();
-          // formData.append("photo", blob, "capture.jpg");
-
-          // // Submit the photo to the Node server
-          // const serverResponse = await fetch("YOUR_NODE_SERVER_URL", {
-          //   method: "POST",
-          //   body: formData,
-          // });
-
-          // if (serverResponse.ok) {
-          //   console.log("Photo submitted successfully");
-          // }
-
-          setTimeout(() => {
-            setCapturedImage(null);
-            setIsCapturing(true);
-          }, 5000); // Wait for 5 seconds before capturing again
-
-          console.log("stopping");
-          return; // Stop further capture until timeout is done
+        // Check for blur using both methods
+        if (isBlurry(img)) {
+          console.log("Image is blurry");
+          setIsImageClear(false);
+          requestAnimationFrame(detectFace); // Continue detection
+          return;
         }
+
+        const detections = await detector.estimateFaces(img);
+
+        // Ensure bounding box size
+        const isClear = detections.some((detection) => {
+          const box = detection.box;
+          return box.width >= MIN_BOX_SIZE && box.height >= MIN_BOX_SIZE;
+        });
+
+        setIsImageClear(isClear);
+        requestAnimationFrame(detectFace); // Continue detection
       }
     }
-    requestAnimationFrame(captureFrame);
-  }, [webcamRef, detectFace, isCapturing, detector, cvLoaded]);
+  }, [webcamRef, detector, cvLoaded, isBlurry]);
 
-  // Start capturing frames
+  // Start continuous face detection
   useEffect(() => {
-    if (isCapturing) {
-      requestAnimationFrame(captureFrame);
+    requestAnimationFrame(detectFace);
+  }, [detectFace]);
+
+  // Capture frame on button click
+  const captureFrame = useCallback(() => {
+    if (webcamRef.current && isImageClear) {
+      const imageSrc = webcamRef.current.getScreenshot();
+      setCapturedImage(imageSrc);
+    } else {
+      alert("No clear face detected.");
     }
-  }, [isCapturing, captureFrame]);
+  }, [webcamRef, isImageClear]);
 
   return (
     <div>
-      <h1>Auto Capture</h1>
-      <div className={`webcam-frame ${isImageClear ? "clear" : "unclear"}`}>
-        <Webcam
-          audio={false}
-          ref={webcamRef}
-          screenshotFormat="image/jpeg"
-          width={IMG_SIZE}
-          height={IMG_SIZE}
-          videoConstraints={videoConstraints}
-        />
-      </div>
+      <h1>Manual Capture</h1>
+      <Webcam
+        audio={false}
+        ref={webcamRef}
+        screenshotFormat="image/jpeg"
+        width={IMG_SIZE}
+        height={IMG_SIZE}
+        videoConstraints={videoConstraints}
+        className={`webcam-frame ${isImageClear ? "clear" : "unclear"}`}
+      />
+      <button onClick={captureFrame}>Capture</button>
       {capturedImage && (
         <div>
           <h2>Face Detected!</h2>
